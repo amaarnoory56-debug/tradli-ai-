@@ -1,0 +1,39 @@
+<!doctype html><html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TRADLI V12 — AI</title>
+<style>
+body{margin:0;background:#070d15;color:#eef5f7;font-family:Arial,sans-serif}.wrap{max-width:720px;margin:auto;padding:18px 14px 40px}.top{display:flex;justify-content:space-between;align-items:center}.logo{font-size:28px;font-weight:900;color:#12c5a5}.card{background:#0d1721;border:1px solid #203443;border-radius:22px;padding:16px;margin:14px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.slot{background:#08121b;border:1px dashed #35505e;border-radius:14px;padding:10px}.preview{height:125px;display:flex;align-items:center;justify-content:center;color:#7f909a;overflow:hidden}.preview img{max-width:100%;max-height:100%}.file{display:block;background:#13303b;border-radius:10px;padding:10px;text-align:center;font-weight:bold}.file input{display:none}button{border:0;border-radius:12px;padding:13px 15px;font-weight:bold;color:white;background:#159b7a}button:disabled{opacity:.45}.wide{width:100%;margin-top:12px}.status{padding:12px;border-radius:12px;background:#102633;line-height:1.7}.warn{background:#2b230f;color:#eed06d}.result{font-size:28px;font-weight:900}.levels{display:grid;grid-template-columns:1fr 1fr;gap:8px}.level{background:#08121b;border:1px solid #203443;border-radius:11px;padding:10px}.level small{display:block;color:#8798a2}.level b{display:block;margin-top:5px}.agent{padding:12px;border:1px solid #22333e;border-radius:14px;margin:8px 0}.muted{color:#93a0a8;font-size:13px;line-height:1.6}.green{color:#19d0ad}
+</style></head><body><div class="wrap">
+<div class="top"><div class="logo">◈ TRADLI V12</div><div>🤖 AI</div></div>
+<div class="card"><h2>مختبر الشارت الذكي</h2><div class="muted">ارفع اللقطات الأربع. الصور تُرسل إلى خادم TRADLI، ثم تحللها 12 وحدة AI مستقلة ومحرك إجماع نهائي.</div>
+<div class="grid" id="grid"></div><div id="status" class="status warn">أكمل رفع 1D و4H و1H و15M.</div>
+<button id="run" class="wide" disabled>تشغيل 12 وكيل + الإجماع</button></div>
+<div id="out"></div></div>
+<script>
+const frames=["1D","4H","1H","15M"], imgs={};
+const grid=document.getElementById("grid");
+grid.innerHTML=frames.map(f=>`<div class="slot"><b>${f}</b><div class="preview" id="p${f}">لم تُرفع</div><label class="file">رفع ${f}<input type="file" accept="image/*" data-f="${f}"></label></div>`).join("");
+document.querySelectorAll("input").forEach(i=>i.onchange=async e=>{
+ const f=e.target.files[0],k=e.target.dataset.f;if(!f)return;
+ const data=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f)});
+ imgs[k]=data;document.getElementById("p"+k).innerHTML=`<img src="${data}">`;
+ const ok=frames.every(x=>imgs[x]);document.getElementById("run").disabled=!ok;
+ document.getElementById("status").className="status "+(ok?"":"warn");
+ document.getElementById("status").textContent=ok?"الفريمات الأربعة جاهزة. يمكنك تشغيل التحليل.":"باقي الفريمات: "+frames.filter(x=>!imgs[x]).join("، ");
+});
+document.getElementById("run").onclick=async()=>{
+ const btn=document.getElementById("run"),st=document.getElementById("status");btn.disabled=true;st.className="status";st.textContent="جاري تحليل 12 وحدة AI ثم تشغيل محرك الإجماع…";
+ try{
+  const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:frames.map(frame=>({frame,data:imgs[frame]}))})});
+  const j=await r.json();if(!r.ok)throw new Error(j.error||"فشل التحليل");
+  const c=j.consensus;
+  document.getElementById("out").innerHTML=`<div class="card"><h2>القرار النهائي</h2><div class="result green">${c.decision}</div><p>الثقة: ${c.confidence}% — جودة البيانات: ${c.data_quality}</p><div class="levels">
+  <div class="level"><small>منطقة الدخول</small><b>${c.entry_zone||"—"}</b></div><div class="level"><small>وقف الخسارة</small><b>${c.stop_loss||"—"}</b></div>
+  <div class="level"><small>الهدف 1</small><b>${c.tp1||"—"}</b></div><div class="level"><small>الهدف 2</small><b>${c.tp2||"—"}</b></div>
+  <div class="level"><small>الهدف 3</small><b>${c.tp3||"—"}</b></div><div class="level"><small>R:R</small><b>${c.rr||"—"}</b></div></div>
+  <h3>لماذا؟</h3><ul>${(c.reason||[]).map(x=>`<li>${x}</li>`).join("")}</ul><div class="status">شرط الإلغاء: ${c.cancel_condition||"—"}</div></div>
+  <div class="card"><h2>نتائج الوكلاء</h2>${j.agents.map(a=>`<div class="agent"><b>${a.agent}</b> — ${a.bias} — ${a.confidence}%<div class="muted">${(a.evidence||[]).join(" • ")}</div></div>`).join("")}</div>`;
+  st.className="status";st.textContent="اكتمل التحليل. التنفيذ يدوي فقط.";
+ }catch(e){st.className="status warn";st.textContent="لم يكتمل التحليل: "+e.message}finally{btn.disabled=false}
+};
+</script></body></html>
